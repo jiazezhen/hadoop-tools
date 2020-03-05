@@ -35,7 +35,7 @@ public class FixHbaseMeta {
 
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        System.setProperty("HADOOP_USER_NAME", "hbase");
+        //System.setProperty("HADOOP_USER_NAME", "hbase");
         cmdLineBegin(args);
     }
 
@@ -140,6 +140,8 @@ public class FixHbaseMeta {
 
         if (result.hasOption(KERBEROS_ENABLE)) {
             System.out.println("kerberos is enabled");
+			System.setProperty("java.security.krb5.conf",
+					ConfProperties.getConf().get("java.security.krb5.conf").toString());
             conf.set("hadoop.security.authentication", "kerberos");
             UserGroupInformation.setConfiguration(conf);
             UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
@@ -175,7 +177,7 @@ public class FixHbaseMeta {
         hdfsRegionNames.removeAll(new HashSet<>(metaRegions));
         System.out.println("hdfsRegionNames size: " + hdfsRegionNames.size());
 
-        // fixHbaseMeta(conn, hdfsRegionNames, hdfsRegions);
+        fixHbaseMeta(conn, hdfsRegionNames, hdfsRegions);
 
         System.out.println("End...");
 
