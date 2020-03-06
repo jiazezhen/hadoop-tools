@@ -5,6 +5,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.MetaTableAccessor;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
@@ -25,17 +26,15 @@ import java.util.*;
  */
 public class FixHbaseMeta {
 
-	public static final String HELP = "h";
-	public static final String DATA_PATH = "d";
-	public static final String NAMESPACE = "n";
-	public static final String TABLE_NAME = "t";
-	public static final String CONFIG_PATH = "c";
-	public static final String KERBEROS_ENABLE = "k";
-	public static final String DEFAULT_NAMESPACE = "default";
-
+    private static final String HELP = "h";
+    private static final String DATA_PATH = "d";
+    private static final String NAMESPACE = "n";
+    private static final String TABLE_NAME = "t";
+    private static final String CONFIG_PATH = "c";
+    private static final String KERBEROS_ENABLE = "k";
+    private static final String DEFAULT_NAMESPACE = "default";
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        //System.setProperty("HADOOP_USER_NAME", "hbase");
         cmdLineBegin(args);
     }
 
@@ -126,7 +125,7 @@ public class FixHbaseMeta {
         String dataPath = result.getOptionValue(DATA_PATH);
         String tableName = result.getOptionValue(TABLE_NAME);
 
-        Configuration conf = new Configuration();
+        Configuration conf = HBaseConfiguration.create();
         ConfProperties.setPath(result.getOptionValue("c"));
         conf.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");
         conf.set("fs.defaultFS", ConfProperties.getConf().get("fs.defaultFS").toString());
@@ -140,8 +139,8 @@ public class FixHbaseMeta {
 
         if (result.hasOption(KERBEROS_ENABLE)) {
             System.out.println("kerberos is enabled");
-			System.setProperty("java.security.krb5.conf",
-					ConfProperties.getConf().get("java.security.krb5.conf").toString());
+            System.setProperty("java.security.krb5.conf",
+                    ConfProperties.getConf().get("java.security.krb5.conf").toString());
             conf.set("hadoop.security.authentication", "kerberos");
             UserGroupInformation.setConfiguration(conf);
             UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
@@ -166,7 +165,6 @@ public class FixHbaseMeta {
             System.out.println("kerberos is disabled");
             conn = ConnectionFactory.createConnection(conf);
             fs = FileSystem.get(conf);
-            ;
         }
 
         List<String> metaRegions = getMetaRegions(conn, nameSpaceName, tableName);
@@ -199,14 +197,15 @@ public class FixHbaseMeta {
                 System.out.println("select regionServer: " + rs);
                 RegionInfo hri = hdfsRegions.get(name);
                 Put info = MetaTableAccessor.makePutFromRegionInfo(hri, EnvironmentEdgeManager.currentTime());
-                info.addColumn("info" .getBytes(), "sn" .getBytes(), Bytes.toBytes(rs.getServerName()));
-                info.addColumn("info" .getBytes(), "server" .getBytes(), Bytes.toBytes(rs.getAddress().toString()));
-                info.addColumn("info" .getBytes(), "state" .getBytes(), Bytes.toBytes("OPEN"));
+                info.addColumn("info".getBytes(), "sn".getBytes(), Bytes.toBytes(rs.getServerName()));
+                info.addColumn("info".getBytes(), "server".getBytes(), Bytes.toBytes(rs.getAddress().toString()));
+                info.addColumn("info".getBytes(), "state".getBytes(), Bytes.toBytes("OPEN"));
                 table.put(info);
                 System.out.println("Put completed!");
             }
             table.close();
         } catch (Exception e) {
+            e.printStackTrace();
             System.out.println("fixHbaseMeta hit exception: " + e);
         } finally {
             conn.close();
@@ -250,7 +249,7 @@ public class FixHbaseMeta {
             System.out.println("getMetaRegions: " + e.getCause());
             return new ArrayList<String>();
         } finally {
-            conn.close();
+            //conn.close();
         }
     }
 
@@ -261,7 +260,6 @@ public class FixHbaseMeta {
             // TODO should check the datapath if end with / should remove
             // "/ocdp1/apps/hbase/data4/data/"
             Path path = new Path(dataPath + nameSpaceName + File.separator + tableName);
-            // + tablePath);
             Map<String, RegionInfo> hdfsRegions = new HashMap<String, RegionInfo>();
             FileStatus[] list = fs.listStatus(path);
             System.out.println("list size: " + list.length);
