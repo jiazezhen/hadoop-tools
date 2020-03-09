@@ -236,9 +236,10 @@ public class FixHbaseMeta {
             while (iterator.hasNext()) {
                 System.out.println("start loop data ==>" + iterator.hasNext());
                 Result result = iterator.next();
-                metaRegions.add(Bytes.toString(result.getRow()));
-                System.out.println("data ==>" + result.getRow().toString());
+                metaRegions.add(Bytes.toStringBinary(result.getRow()));
+                System.out.println("data ==>" + Bytes.toStringBinary(result.getRow()));
             }
+
             table.close();
             System.out.println("metaRegions size: " + metaRegions.size());
             return metaRegions;
