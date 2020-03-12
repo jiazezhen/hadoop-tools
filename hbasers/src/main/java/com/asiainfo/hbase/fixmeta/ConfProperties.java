@@ -1,4 +1,4 @@
-package com.asiainfo.hbase.hbasers;
+package com.asiainfo.hbase.fixmeta;
 
 import java.io.File;
 import java.io.FileInputStream;
