@@ -1,13 +1,7 @@
 package com.asiainfo.hbase.test.tool;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
+import com.asiainfo.hbase.fixmeta.ConfProperties;
+import org.apache.commons.cli.*;
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -15,15 +9,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Admin;
-import org.apache.hadoop.hbase.client.ColumnFamilyDescriptor;
-import org.apache.hadoop.hbase.client.ColumnFamilyDescriptorBuilder;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
-import org.apache.hadoop.hbase.client.RegionLocator;
-import org.apache.hadoop.hbase.client.Table;
-import org.apache.hadoop.hbase.client.TableDescriptor;
-import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
+import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
@@ -31,140 +17,329 @@ import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.tool.LoadIncrementalHFiles;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.security.UserGroupInformation;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class TestHbaseBlukLoad {
 
-	public static void main(String[] args) throws IOException, InterruptedException, URISyntaxException {
-		System.out.println("Start...");
+    private static final String HELP = "h";
+    private static final String HFILE_DIR = "d";
+    private static final String CF_NAME = "cf";
+    private static final String HFILE_NAME = "fn";
+    private static final String TABLE_NAME = "t";
+    private static final String ROWS_NUMBER = "rn";
+    private static final String ROW_SIZE = "rs";
+    private static final String SPLITS = "s";
+    private static final String REGION_SPLIT_COUNT = "rsc";
+    private static final String CONFIG_PATH = "c";
+    private static final String KERBEROS_ENABLE = "k";
 
-		System.out.println("hfileDir: " + args[0]);
-		String hfileDir = args[0];
-		System.out.println("CFName: " + args[1]);
-		String CFName = args[1];
-		System.out.println("hfileName: " + args[2]);
-		String hfileName = args[2];
-		System.out.println("tableName: " + args[3]);
-		String tableNameStr = args[3];
-		System.out.println("rowsNumber: " + args[4]);
-		String rowsNumber = args[4];
-		System.out.println("rowSize: " + args[5]);
-		String rowSize = args[5];
-		System.out.println("splits: " + args[6]);
-		String splits = args[6];
-		System.out.println("regionSplitCount: " + args[7]);
-		String regionSplitCount = args[7];
 
-		List<String> list = new ArrayList<String>();
-		int total = Integer.parseInt(rowsNumber);
-		for (int i = 0; i < total; i++) {
-			list.add(String.valueOf(i));
-		}
-		// sort
-		Collections.sort(list);
-		System.out.println("end generate row keys");
+    public static void main(String[] args) throws IOException, InterruptedException, URISyntaxException {
+        new TestHbaseBlukLoad().cmdLineBegin(args);
+    }
 
-		Configuration conf = HBaseConfiguration.create();
-		// conf.set("hbase.zookeeper.quorum",
-		// "kvm-dp-centos76-node2,kvm-dp-centos76-node3,kvm-dp-centos76-node4");
-		conf.set("hbase.zookeeper.quorum", "host-10-1-236-55,host-10-1-236-56,host-10-1-236-57");
-		conf.set("hbase.zookeeper.property.clientPort", "2181");
-		conf.set("zookeeper.znode.parent", "/hbase-unsecure");
-		conf.setInt("hbase.mapreduce.bulkload.max.hfiles.perRegion.perFamily", 1024);
-		// conf.set("hbase.bulkload.retries.number", "10000");
-		System.setProperty("HADOOP_USER_NAME", "ocdp");
-		conf.set("fs.defaultFS", "hdfs://10.1.236.55:8020");
+    private void cmdLineBegin(String[] args) throws InterruptedException, IOException, URISyntaxException {
+        Options options = new Options();
 
-		Connection conn = ConnectionFactory.createConnection(conf);
-		Admin admin = conn.getAdmin();
-		FileSystem fs = FileSystem.get(new URI("/tmp"), conf, "ocdp");
+        options.addOption(Option.builder(HELP)
+                .longOpt("help")
+                .desc("show this help message and exit program")
+                .build());
 
-		HFileContext hfileContext = new HFileContextBuilder().withCompression(Compression.Algorithm.NONE).build();
-		Path hfilePathWithName = new Path(hfileDir + File.separator + CFName + File.separator + hfileName);
-		HFile.Writer writer = HFile.getWriterFactory(conf, new CacheConfig(conf)).withPath(fs, hfilePathWithName)
-				.withFileContext(hfileContext).create();
-		try {
+        options.addOption(Option.builder(HFILE_DIR)
+                .longOpt("hfiledir")
+                .hasArg()
+                .argName("hfiledir")
+                .required(true)
+                .desc("The root directory where the generated hfiles are placed" +
+                        "\ne.g /test2020/hfiles")
+                .build());
 
-			// create folder
-			// fs.mkdirs(new Path(hfileDir + File.separator + CFName));
+        options.addOption(Option.builder(CF_NAME)
+                .longOpt("cfname")
+                .hasArg()
+                .argName("cfname")
+                .required(true)
+                .desc("The column family name" +
+                        "\ne.g cf ")
+                .build());
 
-			// create table
-			TableName tableName = TableName.valueOf(tableNameStr);
-			TableDescriptorBuilder tdb = TableDescriptorBuilder.newBuilder(tableName);
-			ColumnFamilyDescriptorBuilder cdb = ColumnFamilyDescriptorBuilder.newBuilder(Bytes.toBytes("cf"));
-			ColumnFamilyDescriptor cfd = cdb.build();
-			tdb.setColumnFamily(cfd);
-			TableDescriptor td = tdb.build();
-			int len = Integer.parseInt(splits);
-			byte[][] splitKeys = new byte[len][];
-			for (int j = 0; j < len; j++) {
-				if (j < 10) {
-					splitKeys[j] = Bytes.toBytes("00" + j);
-					continue;
-				}
-				if (j < 100) {
-					splitKeys[j] = Bytes.toBytes("0" + j);
-					continue;
-				}
-//				if (j < 1000) {
-//					splitKeys[j] = Bytes.toBytes("0" + j);
-//					continue;
-//				} 
-				splitKeys[j] = Bytes.toBytes(String.valueOf(j));
-			}
-			System.out.println("end create splitKeys");
-			if (admin.tableExists(tableName)) {
-				admin.disableTable(tableName);
-				admin.deleteTable(tableName);
-				System.out.println("delete exist table");
-			}
-			admin.createTable(td, splitKeys);
-			System.out.println("end create table");
+        options.addOption(Option.builder(HFILE_NAME)
+                .longOpt("hfilename")
+                .hasArg()
+                .argName("hfilename")
+                .required(true)
+                .desc("The generated name")
+                .build());
 
-			// generate hfile
-			int count = 0;
-			int fileCount = 0;
-			int flag = Integer.parseInt(regionSplitCount);
-			for (String s : list) {
-				if (count > flag) {
-					writer.close();
-					hfilePathWithName = new Path(
-							hfileDir + File.separator + CFName + File.separator + hfileName + fileCount);
-					writer = HFile.getWriterFactory(conf, new CacheConfig(conf)).withPath(fs, hfilePathWithName)
-							.withFileContext(hfileContext).create();
-					count = 0;
-					fileCount++;
-				}
+        options.addOption(Option.builder(TABLE_NAME)
+                .longOpt("tablename")
+                .hasArg()
+                .argName("tablename")
+                .required(true)
+                .desc("New table name to load data into hbase")
+                .build());
 
-				KeyValue keyValue = new KeyValue(Bytes.toBytes(s), Bytes.toBytes("cf"), Bytes.toBytes("col1"),
-						Bytes.toBytes(RandomStringUtils.random(Integer.parseInt(rowSize))));
-				writer.append(keyValue);
-				count++;
-			}
-			writer.close();
-			fs.close();
-			System.out.println("end generate hfile");
+        options.addOption(Option.builder(ROWS_NUMBER)
+                .longOpt("rowsnum")
+                .hasArg()
+                .argName("rowsnum")
+                .required(true)
+                .desc("How many rows of data to generate" +
+                        "\ne.g 100")
+                .build());
 
-			// load hfile
-			Table table = conn.getTable(tableName);
-			RegionLocator locator = conn.getRegionLocator(tableName);
+        options.addOption(Option.builder(ROW_SIZE)
+                .longOpt("rowsize")
+                .hasArg()
+                .argName("rowsize")
+                .required(true)
+                .desc("Data size of each row" +
+                        "\ne.g 20")
+                .build());
 
-			LoadIncrementalHFiles loader = new LoadIncrementalHFiles(conf);
-			Path path = new Path("hdfs://10.1.236.55:8020" + hfileDir);
-			loader.doBulkLoad(path, admin, table, locator);
-			System.out.println("end load hfile");
+        options.addOption(Option.builder(SPLITS)
+                .longOpt("splits")
+                .hasArg()
+                .argName("splitsNum")
+                .required(true)
+                .desc("Number of regions to split the table into" +
+                        "\ne.g 5")
+                .build());
 
-		} catch (Exception e) {
-			System.out.println("Exception");
-			System.out.println(e.getStackTrace());
-			System.out.println(e.getCause());
-			System.out.println(e.getMessage());
-		} finally {
-			// writer.close();
-			fs.close();
-			conn.close();
-			admin.close();
-		}
-		System.out.println("End");
-	}
+        options.addOption(Option.builder(REGION_SPLIT_COUNT)
+                .longOpt("regionsplitcount")
+                .hasArg()
+                .argName("regionsplitcount")
+                .required(true)
+                .desc("Data size of each region" +
+                        "\ne.g /root/conf/")
+                .build());
+
+        options.addOption(Option.builder(CONFIG_PATH)
+                .longOpt("config")
+                .hasArg()
+                .argName("configpath")
+                .required(true)
+                .desc("Path to configuration.properties" +
+                        "\ne.g /root/conf/")
+                .build());
+
+        options.addOption(Option.builder(KERBEROS_ENABLE)
+                .longOpt("kerberos")
+                .desc("If the cluster has Kerberos enabled, this is required")
+                .build());
+
+        CommandLineParser parser = new DefaultParser();
+        HelpFormatter formatter = new HelpFormatter();
+        CommandLine result = null;
+
+        try {
+            result = parser.parse(options, args);
+        } catch (ParseException e) {
+            System.err.println(e.getMessage());
+            formatter.printHelp("TestHbaseBlukLoad", options, true);
+            System.exit(1);
+        }
+
+        if (result.hasOption(HELP)) {
+            formatter.printHelp("TestHbaseBlukLoad", options, true);
+            System.exit(0);
+        }
+
+        kerberosSwitch(result);
+    }
+
+    private void kerberosSwitch(CommandLine result) throws IOException, InterruptedException {
+        System.out.println("HFILE_DIR=" + result.getOptionValue(HFILE_DIR) +
+                "\nCF_NAME=" + result.getOptionValue(CF_NAME) +
+                "\nHFILE_NAME=" + result.getOptionValue(HFILE_NAME) +
+                "\nTABLE_NAME=" + result.getOptionValue(TABLE_NAME) +
+                "\nROWS_NUMBER=" + result.getOptionValue(ROWS_NUMBER) +
+                "\nROW_SIZE=" + result.getOptionValue(ROW_SIZE) +
+                "\nSPLITS=" + result.getOptionValue(SPLITS) +
+                "\nREGION_SPLIT_COUNT=" + result.getOptionValue(REGION_SPLIT_COUNT) +
+                "\nCONFIG_PATH=" + result.getOptionValue(CONFIG_PATH));
+
+        ConfProperties.setPath(result.getOptionValue("c"));
+        Configuration conf = initialConfiguration();
+        Connection conn;
+        FileSystem fs;
+
+        if (result.hasOption(KERBEROS_ENABLE)) {
+            System.out.println("kerberos is enabled!");
+            System.setProperty("java.security.krb5.conf",
+                    ConfProperties.getConf().getProperty("java.security.krb5.conf"));
+            conf.set("hadoop.security.authentication", "kerberos");
+            conf.set("hbase.security.authentication","kerberos");
+            conf.set("hbase.master.kerberos.principal",
+                    ConfProperties.getConf().getProperty("hbase.master.kerberos.principal"));
+            conf.set("hbase.regionserver.kerberos.principal",
+                    ConfProperties.getConf().getProperty("hbase.regionserver.kerberos.principal"));
+
+            UserGroupInformation.setConfiguration(conf);
+            UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
+                    ConfProperties.getConf().getProperty("krb.hbase.principle"),
+                    ConfProperties.getConf().getProperty("krb.hbase.keytab"));
+            conn = ugi.doAs(new PrivilegedExceptionAction<Connection>() {
+                @Override
+                public Connection run() throws IOException {
+                    return ConnectionFactory.createConnection(conf);
+                }
+            });
+            UserGroupInformation ugi2 = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
+                    ConfProperties.getConf().get("krb.hdfs.principle").toString(),
+                    ConfProperties.getConf().get("krb.hdfs.keytab").toString());
+            fs = ugi2.doAs(new PrivilegedExceptionAction<FileSystem>() {
+                @Override
+                public FileSystem run() throws IOException {
+                    return FileSystem.get(conf);
+                }
+            });
+
+
+        } else {
+            System.out.println("kerberos is disabled!");
+            System.setProperty("HADOOP_USER_NAME", ConfProperties.getConf().getProperty("hadoop.user.name"));
+
+            conn = ConnectionFactory.createConnection(conf);
+            fs = FileSystem.get(conf);
+        }
+
+        Admin admin = conn.getAdmin();
+        try {
+            System.out.println("Start");
+            /** create table */
+            TableName tableName = createTable(conf, result, admin);
+            /** generate hfile */
+            generateHfile(result, conf, fs);
+            /** load hfile */
+            loadHfileToHbase(result, conf, conn, admin, tableName);
+        } catch (Exception e) {
+            System.out.println("Exception");
+            System.out.println(e.getStackTrace());
+            System.out.println(e.getCause());
+            System.out.println(e.getMessage());
+        } finally {
+            fs.close();
+            conn.close();
+            admin.close();
+        }
+
+        System.out.println("End");
+    }
+
+    private Configuration initialConfiguration() {
+        Configuration conf = HBaseConfiguration.create();
+        // conf.set("hbase.bulkload.retries.number", "10000");
+        conf.set("fs.defaultFS", ConfProperties.getConf().getProperty("fs.defaultFS"));
+        conf.set("hbase.zookeeper.property.clientPort",
+                ConfProperties.getConf().getProperty("hbase.zookeeper.property.clientPort"));
+        conf.set("hbase.zookeeper.quorum", ConfProperties.getConf().getProperty("hbase.zookeeper.quorum"));
+        conf.set("zookeeper.znode.parent", ConfProperties.getConf().getProperty("zookeeper.znode.parent"));
+        conf.setInt("hbase.mapreduce.bulkload.max.hfiles.perRegion.perFamily",
+                Integer.parseInt(ConfProperties.getConf().getProperty("hbase.mapreduce.bulkload.max.hfiles.perRegion.perFamily")));
+
+        return conf;
+    }
+    private TableName createTable(Configuration conf, CommandLine result, Admin admin) throws IOException {
+        TableName tableName = TableName.valueOf(result.getOptionValue(TABLE_NAME));
+        TableDescriptorBuilder tdb = TableDescriptorBuilder.newBuilder(tableName);
+        ColumnFamilyDescriptorBuilder cdb = ColumnFamilyDescriptorBuilder.newBuilder(
+                Bytes.toBytes(result.getOptionValue(CF_NAME)));
+        ColumnFamilyDescriptor cfd = cdb.build();
+        tdb.setColumnFamily(cfd);
+        TableDescriptor td = tdb.build();
+        int len = Integer.parseInt(result.getOptionValue(SPLITS));
+        // byte[][] splitKeys = RegionSplitter.newSplitAlgoInstance(conf, "DecimalStringSplit").split(len);
+        byte[][] splitKeys = new byte[len][];
+        for (int j = 0; j < len; j++) {
+            if (j < 10) {
+                splitKeys[j] = Bytes.toBytes("00" + j);
+                continue;
+            }
+            if (j < 100) {
+                splitKeys[j] = Bytes.toBytes("0" + j);
+                continue;
+            }
+            splitKeys[j] = Bytes.toBytes(String.valueOf(j));
+        }
+        System.out.println("end create splitKeys");
+        if (admin.tableExists(tableName)) {
+            admin.disableTable(tableName);
+            admin.deleteTable(tableName);
+            System.out.println("delete exist table");
+        }
+        admin.createTable(td, splitKeys);
+        System.out.println("end create table");
+        return tableName;
+    }
+
+    private void generateHfile(CommandLine result, Configuration conf, FileSystem fs) throws IOException {
+        HFileContext hfileContext = new HFileContextBuilder().withCompression(Compression.Algorithm.NONE).build();
+        Path hfilePathWithName = new Path(result.getOptionValue(HFILE_DIR) +
+                File.separator + result.getOptionValue(CF_NAME) +
+                File.separator + result.getOptionValue(HFILE_NAME));
+        HFile.Writer writer = HFile.getWriterFactory(conf,
+                new CacheConfig(conf)).withPath(fs, hfilePathWithName).withFileContext(hfileContext).create();
+
+        List<String> rowKeyList = getRowKeyList(result.getOptionValue(ROWS_NUMBER));
+        int count = 0;
+        int fileCount = 0;
+        int flag = Integer.parseInt(result.getOptionValue(REGION_SPLIT_COUNT));
+        for (String s : rowKeyList) {
+            if (count > flag) {
+                writer.close();
+                hfilePathWithName = new Path(result.getOptionValue(HFILE_DIR) +
+                        File.separator + result.getOptionValue(CF_NAME) +
+                        File.separator + result.getOptionValue(HFILE_NAME) +
+                        fileCount);
+
+                writer = HFile.getWriterFactory(conf, new CacheConfig(conf)).withPath(fs, hfilePathWithName)
+                        .withFileContext(hfileContext).create();
+                count = 0;
+                fileCount++;
+            }
+
+            KeyValue keyValue = new KeyValue(Bytes.toBytes(s), Bytes.toBytes(result.getOptionValue(CF_NAME)),
+                    Bytes.toBytes("col1"),
+                    Bytes.toBytes(RandomStringUtils.random(Integer.parseInt(result.getOptionValue(ROW_SIZE)))));
+            writer.append(keyValue);
+            count++;
+        }
+        writer.close();
+        fs.close();
+        System.out.println("end generate hfile");
+    }
+
+    private void loadHfileToHbase(CommandLine result, Configuration conf, Connection conn, Admin admin, TableName tableName) throws IOException {
+        Table table = conn.getTable(tableName);
+        RegionLocator locator = conn.getRegionLocator(tableName);
+
+        LoadIncrementalHFiles loader = new LoadIncrementalHFiles(conf);
+        Path path = new Path(ConfProperties.getConf().getProperty("fs.defaultFS") + result.getOptionValue(HFILE_DIR));
+        loader.doBulkLoad(path, admin, table, locator);
+        System.out.println("end load hfile");
+    }
+
+    private List<String> getRowKeyList(String rowsNum) {
+        List<String> list = new ArrayList<String>();
+        int total = Integer.parseInt(rowsNum);
+        for (int i = 0; i < total; i++) {
+            list.add(String.valueOf(i));
+        }
+        // sort
+        Collections.sort(list);
+        return list;
+    }
+
 
 }
