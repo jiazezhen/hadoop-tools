@@ -142,6 +142,9 @@ public class FixHbaseMeta {
             System.setProperty("java.security.krb5.conf",
                     ConfProperties.getConf().get("java.security.krb5.conf").toString());
             conf.set("hadoop.security.authentication", "kerberos");
+            conf.set("hbase.security.authentication","kerberos");
+            conf.set("hbase.master.kerberos.principal",ConfProperties.getConf().getProperty("hbase.master.kerberos.principal"));
+            conf.set("hbase.regionserver.kerberos.principal",ConfProperties.getConf().getProperty("hbase.regionserver.kerberos.principal"));
             UserGroupInformation.setConfiguration(conf);
             UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
                     ConfProperties.getConf().get("krb.user.principle").toString(),
@@ -163,6 +166,7 @@ public class FixHbaseMeta {
 
         } else {
             System.out.println("kerberos is disabled");
+            System.setProperty("HADOOP_USER_NAME", ConfProperties.getConf().getProperty("hadoop.user.name"));
             conn = ConnectionFactory.createConnection(conf);
             fs = FileSystem.get(conf);
         }
