@@ -325,7 +325,10 @@ public class TestHbaseBlukLoad {
         RegionLocator locator = conn.getRegionLocator(tableName);
 
         LoadIncrementalHFiles loader = new LoadIncrementalHFiles(conf);
-        Path path = new Path(ConfProperties.getConf().getProperty("fs.defaultFS") + result.getOptionValue(HFILE_DIR));
+        Path path = new Path(ConfProperties.getConf().getProperty("fs.defaultFS")
+                + result.getOptionValue(HFILE_DIR)
+                +  File.separator + result.getOptionValue(CF_NAME)
+                + File.separator + result.getOptionValue(HFILE_NAME));
         loader.doBulkLoad(path, admin, table, locator);
         System.out.println("end load hfile");
     }
