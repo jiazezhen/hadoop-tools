@@ -22,7 +22,6 @@ import org.apache.hadoop.security.UserGroupInformation;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -46,7 +45,7 @@ public class TestHbaseBlukLoad {
         new TestHbaseBlukLoad().cmdLineBegin(args);
     }
 
-    private void cmdLineBegin(String[] args) throws InterruptedException, IOException, URISyntaxException {
+    private void cmdLineBegin(String[] args) throws InterruptedException, IOException {
         Options options = new Options();
 
         options.addOption(Option.builder(HELP)
@@ -158,7 +157,7 @@ public class TestHbaseBlukLoad {
         kerberosSwitch(result);
     }
 
-    private void kerberosSwitch(CommandLine result) throws IOException, InterruptedException {
+    private void kerberosSwitch(CommandLine result) throws IOException {
         System.out.println("HFILE_DIR=" + result.getOptionValue(HFILE_DIR) +
                 "\nCF_NAME=" + result.getOptionValue(CF_NAME) +
                 "\nHFILE_NAME=" + result.getOptionValue(HFILE_NAME) +
@@ -171,54 +170,35 @@ public class TestHbaseBlukLoad {
 
         ConfProperties.setPath(result.getOptionValue("c"));
         Configuration conf = initialConfiguration();
-        Connection conn;
-        FileSystem fs;
 
         if (result.hasOption(KERBEROS_ENABLE)) {
             System.out.println("kerberos is enabled!");
             System.setProperty("java.security.krb5.conf",
                     ConfProperties.getConf().getProperty("java.security.krb5.conf"));
             conf.set("hadoop.security.authentication", "kerberos");
-            conf.set("hbase.security.authentication","kerberos");
+            conf.set("hbase.security.authentication", "kerberos");
             conf.set("hbase.master.kerberos.principal",
                     ConfProperties.getConf().getProperty("hbase.master.kerberos.principal"));
             conf.set("hbase.regionserver.kerberos.principal",
                     ConfProperties.getConf().getProperty("hbase.regionserver.kerberos.principal"));
 
             UserGroupInformation.setConfiguration(conf);
-            UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
-                    ConfProperties.getConf().getProperty("krb.hbase.principle"),
-                    ConfProperties.getConf().getProperty("krb.hbase.keytab"));
-            conn = ugi.doAs(new PrivilegedExceptionAction<Connection>() {
-                @Override
-                public Connection run() throws IOException {
-                    return ConnectionFactory.createConnection(conf);
-                }
-            });
-            UserGroupInformation ugi2 = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
-                    ConfProperties.getConf().get("krb.hdfs.principle").toString(),
-                    ConfProperties.getConf().get("krb.hdfs.keytab").toString());
-            fs = ugi2.doAs(new PrivilegedExceptionAction<FileSystem>() {
-                @Override
-                public FileSystem run() throws IOException {
-                    return FileSystem.get(conf);
-                }
-            });
+            UserGroupInformation.loginUserFromKeytab(ConfProperties.getConf().getProperty("krb.user.principle"),
+                    ConfProperties.getConf().getProperty("krb.user.keytab"));
 
 
         } else {
             System.out.println("kerberos is disabled!");
             System.setProperty("HADOOP_USER_NAME", ConfProperties.getConf().getProperty("hadoop.user.name"));
-
-            conn = ConnectionFactory.createConnection(conf);
-            fs = FileSystem.get(conf);
         }
 
+        Connection conn = ConnectionFactory.createConnection(conf);
+        FileSystem fs = FileSystem.get(conf);
         Admin admin = conn.getAdmin();
         try {
             System.out.println("Start");
             /** create table */
-            TableName tableName = createTable(conf, result, admin);
+            TableName tableName = createTable(result, admin);
             /** generate hfile */
             generateHfile(result, conf, fs);
             /** load hfile */
@@ -250,7 +230,8 @@ public class TestHbaseBlukLoad {
 
         return conf;
     }
-    private TableName createTable(Configuration conf, CommandLine result, Admin admin) throws IOException {
+
+    private TableName createTable(CommandLine result, Admin admin) throws IOException {
         TableName tableName = TableName.valueOf(result.getOptionValue(TABLE_NAME));
         TableDescriptorBuilder tdb = TableDescriptorBuilder.newBuilder(tableName);
         ColumnFamilyDescriptorBuilder cdb = ColumnFamilyDescriptorBuilder.newBuilder(
@@ -325,10 +306,7 @@ public class TestHbaseBlukLoad {
         RegionLocator locator = conn.getRegionLocator(tableName);
 
         LoadIncrementalHFiles loader = new LoadIncrementalHFiles(conf);
-        Path path = new Path(ConfProperties.getConf().getProperty("fs.defaultFS")
-                + result.getOptionValue(HFILE_DIR)
-                +  File.separator + result.getOptionValue(CF_NAME)
-                + File.separator + result.getOptionValue(HFILE_NAME));
+        Path path = new Path(ConfProperties.getConf().getProperty("fs.defaultFS") + result.getOptionValue(HFILE_DIR));
         loader.doBulkLoad(path, admin, table, locator);
         System.out.println("end load hfile");
     }

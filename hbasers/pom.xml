@@ -149,6 +149,15 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.6.0</version>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
                     <execution>
@@ -171,13 +180,13 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>2.4</version>
                 <configuration>
-                    <finalName>FixHbaseMeta-${version}</finalName>
+                    <finalName>FixHbaseMeta-${project.version}</finalName>
                     <archive>
                         <addMavenDescriptor>false</addMavenDescriptor>
                         <manifest>
-                            <mainClass>com.asiainfo.hbase.hbasers.FixHbaseMeta</mainClass>
+                            <mainClass>com.asiainfo.hbase.fixmeta.FixHbaseMeta</mainClass>
                             <addClasspath>true</addClasspath>
-                            <classpathPrefix>lib/</classpathPrefix>
+                            <classpathPrefix>${project.build.directory}/lib</classpathPrefix>
                         </manifest>
                     </archive>
                 </configuration>
@@ -189,11 +198,12 @@
                             <goal>jar</goal>
                         </goals>
                         <configuration>
-                            <finalName>TestHbaseBulkLoad-${version}</finalName>
+                            <finalName>TestHbaseBulkLoad-${project.version}</finalName>
                             <archive>
                                 <manifest>
                                     <mainClass>com.asiainfo.hbase.test.tool.TestHbaseBlukLoad</mainClass>
                                     <addClasspath>true</addClasspath>
+                                    <classpathPrefix>${project.build.directory}/lib</classpathPrefix>
                                 </manifest>
                             </archive>
                         </configuration>
