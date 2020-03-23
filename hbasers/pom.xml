@@ -186,7 +186,7 @@
                         <manifest>
                             <mainClass>com.asiainfo.hbase.fixmeta.FixHbaseMeta</mainClass>
                             <addClasspath>true</addClasspath>
-                            <classpathPrefix>${project.build.directory}/lib</classpathPrefix>
+                            <classpathPrefix>./lib</classpathPrefix>
                         </manifest>
                     </archive>
                 </configuration>
@@ -203,7 +203,7 @@
                                 <manifest>
                                     <mainClass>com.asiainfo.hbase.test.tool.TestHbaseBlukLoad</mainClass>
                                     <addClasspath>true</addClasspath>
-                                    <classpathPrefix>${project.build.directory}/lib</classpathPrefix>
+                                    <classpathPrefix>./lib</classpathPrefix>
                                 </manifest>
                             </archive>
                         </configuration>
