@@ -22,9 +22,11 @@ import org.apache.hadoop.security.UserGroupInformation;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public class TestHbaseBlukLoad {
 
@@ -39,6 +41,9 @@ public class TestHbaseBlukLoad {
     private static final String REGION_SPLIT_COUNT = "rsc";
     private static final String CONFIG_PATH = "c";
     private static final String KERBEROS_ENABLE = "k";
+    private static final String RECREATE_TABLE_IF_EXISTS = "dr";
+    private byte[][] splitKeys;
+    private NumberFormat numberFormat;
 
 
     public static void main(String[] args) throws IOException, InterruptedException, URISyntaxException {
@@ -137,6 +142,11 @@ public class TestHbaseBlukLoad {
                 .desc("If the cluster has Kerberos enabled, this is required")
                 .build());
 
+        options.addOption(Option.builder(RECREATE_TABLE_IF_EXISTS)
+                .longOpt("drop")
+                .desc("If the target table exists, drop it first")
+                .build());
+
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         CommandLine result = null;
@@ -205,6 +215,7 @@ public class TestHbaseBlukLoad {
             loadHfileToHbase(result, conf, conn, admin, tableName);
         } catch (Exception e) {
             System.out.println("Exception");
+            e.printStackTrace();
             System.out.println(e.getStackTrace());
             System.out.println(e.getCause());
             System.out.println(e.getMessage());
@@ -219,15 +230,10 @@ public class TestHbaseBlukLoad {
 
     private Configuration initialConfiguration() {
         Configuration conf = HBaseConfiguration.create();
-        // conf.set("hbase.bulkload.retries.number", "10000");
-        conf.set("fs.defaultFS", ConfProperties.getConf().getProperty("fs.defaultFS"));
-        conf.set("hbase.zookeeper.property.clientPort",
-                ConfProperties.getConf().getProperty("hbase.zookeeper.property.clientPort"));
-        conf.set("hbase.zookeeper.quorum", ConfProperties.getConf().getProperty("hbase.zookeeper.quorum"));
-        conf.set("zookeeper.znode.parent", ConfProperties.getConf().getProperty("zookeeper.znode.parent"));
-        conf.setInt("hbase.mapreduce.bulkload.max.hfiles.perRegion.perFamily",
-                Integer.parseInt(ConfProperties.getConf().getProperty("hbase.mapreduce.bulkload.max.hfiles.perRegion.perFamily")));
-
+        Set<String> strings = ConfProperties.getConf().stringPropertyNames();
+        for (String propertyName : strings) {
+            conf.set(propertyName, ConfProperties.getConf().getProperty(propertyName));
+        }
         return conf;
     }
 
@@ -239,29 +245,41 @@ public class TestHbaseBlukLoad {
         ColumnFamilyDescriptor cfd = cdb.build();
         tdb.setColumnFamily(cfd);
         TableDescriptor td = tdb.build();
-        int len = Integer.parseInt(result.getOptionValue(SPLITS));
-        // byte[][] splitKeys = RegionSplitter.newSplitAlgoInstance(conf, "DecimalStringSplit").split(len);
-        byte[][] splitKeys = new byte[len][];
-        for (int j = 0; j < len; j++) {
-            if (j < 10) {
-                splitKeys[j] = Bytes.toBytes("00" + j);
-                continue;
-            }
-            if (j < 100) {
-                splitKeys[j] = Bytes.toBytes("0" + j);
-                continue;
-            }
-            splitKeys[j] = Bytes.toBytes(String.valueOf(j));
-        }
+        int splits = Integer.parseInt(result.getOptionValue(SPLITS));
+        // byte[][] splitKeys = RegionSplitter.newSplitAlgoInstance(conf, "DecimalStringSplit").split(splits);
+        byte[][] splitKeys = generateSplitKeys(Integer.parseInt(result.getOptionValue(ROWS_NUMBER)), splits);
         System.out.println("end create splitKeys");
         if (admin.tableExists(tableName)) {
-            admin.disableTable(tableName);
-            admin.deleteTable(tableName);
-            System.out.println("delete exist table");
+            if (result.hasOption(RECREATE_TABLE_IF_EXISTS)) {
+                admin.disableTable(tableName);
+                admin.deleteTable(tableName);
+                System.out.println("delete exist table");
+                admin.createTable(td, splitKeys);
+            }
+        } else {
+            admin.createTable(td, splitKeys);
         }
-        admin.createTable(td, splitKeys);
         System.out.println("end create table");
+
         return tableName;
+    }
+
+    private byte[][] generateSplitKeys(int rows, int splits) {
+        numberFormat = NumberFormat.getInstance();
+        numberFormat.setGroupingUsed(false);
+        int digitLength = (rows + "").length();
+        numberFormat.setMaximumIntegerDigits(digitLength);
+        numberFormat.setMinimumIntegerDigits(digitLength);
+        int start = 0;
+        int end = rows;
+        int interval = (end - start) / splits;
+        splitKeys = new byte[splits][];
+        int index = 0;
+        for (int i = interval; i <= end; i += interval) {
+            System.out.println(index + ":" + new String(Bytes.toBytes(numberFormat.format(i))));
+            splitKeys[index++] = Bytes.toBytes(numberFormat.format(i));
+        }
+        return splitKeys;
     }
 
     private void generateHfile(CommandLine result, Configuration conf, FileSystem fs) throws IOException {
@@ -272,29 +290,31 @@ public class TestHbaseBlukLoad {
         HFile.Writer writer = HFile.getWriterFactory(conf,
                 new CacheConfig(conf)).withPath(fs, hfilePathWithName).withFileContext(hfileContext).create();
 
-        List<String> rowKeyList = getRowKeyList(result.getOptionValue(ROWS_NUMBER));
+        ArrayList<List<String>> rowKeyLists = getRowKeyList(result.getOptionValue(ROWS_NUMBER));
         int count = 0;
         int fileCount = 0;
         int flag = Integer.parseInt(result.getOptionValue(REGION_SPLIT_COUNT));
-        for (String s : rowKeyList) {
-            if (count > flag) {
-                writer.close();
-                hfilePathWithName = new Path(result.getOptionValue(HFILE_DIR) +
-                        File.separator + result.getOptionValue(CF_NAME) +
-                        File.separator + result.getOptionValue(HFILE_NAME) +
-                        fileCount);
+        for (List<String> rowKeyList : rowKeyLists) {
+            for (String s : rowKeyList) {
+                if (count > flag) {
+                    writer.close();
+                    hfilePathWithName = new Path(result.getOptionValue(HFILE_DIR) +
+                            File.separator + result.getOptionValue(CF_NAME) +
+                            File.separator + result.getOptionValue(HFILE_NAME) +
+                            fileCount);
 
-                writer = HFile.getWriterFactory(conf, new CacheConfig(conf)).withPath(fs, hfilePathWithName)
-                        .withFileContext(hfileContext).create();
-                count = 0;
-                fileCount++;
+                    writer = HFile.getWriterFactory(conf, new CacheConfig(conf)).withPath(fs, hfilePathWithName)
+                            .withFileContext(hfileContext).create();
+                    count = 0;
+                    fileCount++;
+                }
+
+                KeyValue keyValue = new KeyValue(Bytes.toBytes(s), Bytes.toBytes(result.getOptionValue(CF_NAME)),
+                        Bytes.toBytes("col1"),
+                        Bytes.toBytes(RandomStringUtils.random(Integer.parseInt(result.getOptionValue(ROW_SIZE)))));
+                writer.append(keyValue);
+                count++;
             }
-
-            KeyValue keyValue = new KeyValue(Bytes.toBytes(s), Bytes.toBytes(result.getOptionValue(CF_NAME)),
-                    Bytes.toBytes("col1"),
-                    Bytes.toBytes(RandomStringUtils.random(Integer.parseInt(result.getOptionValue(ROW_SIZE)))));
-            writer.append(keyValue);
-            count++;
         }
         writer.close();
         fs.close();
@@ -311,14 +331,21 @@ public class TestHbaseBlukLoad {
         System.out.println("end load hfile");
     }
 
-    private List<String> getRowKeyList(String rowsNum) {
-        List<String> list = new ArrayList<String>();
-        int total = Integer.parseInt(rowsNum);
-        for (int i = 0; i < total; i++) {
-            list.add(String.valueOf(i));
+    private ArrayList<List<String>> getRowKeyList(String rowsNum) {
+        ArrayList<List<String>> list = new ArrayList<>();
+
+        int left = 0;
+        for (byte[] splitKeyByteArr : splitKeys) {
+            int right = Integer.parseInt(new String(splitKeyByteArr));
+            ArrayList<String> strings = new ArrayList<>();
+            for (int i = left; i < right; i++) {
+                strings.add(numberFormat.format(i));
+            }
+            left = right;
+            Collections.sort(strings);
+            list.add(strings);
         }
         // sort
-        Collections.sort(list);
         return list;
     }
 
