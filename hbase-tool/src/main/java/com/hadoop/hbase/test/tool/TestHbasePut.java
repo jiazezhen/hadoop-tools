@@ -1,4 +1,4 @@
-package com.asiainfo.hbase.test.tool;
+package com.hadoop.hbase.test.tool;
 
 import java.io.IOException;
 import java.util.ArrayList;

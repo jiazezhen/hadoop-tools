@@ -1,4 +1,4 @@
-package com.asiainfo.hbase.fixmeta;
+package com.hadoop.hbase.fixmeta;
 
 import org.apache.commons.cli.*;
 import org.apache.hadoop.conf.Configuration;

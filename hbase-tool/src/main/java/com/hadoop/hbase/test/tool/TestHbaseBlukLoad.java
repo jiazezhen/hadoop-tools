@@ -1,6 +1,6 @@
-package com.asiainfo.hbase.test.tool;
+package com.hadoop.hbase.test.tool;
 
-import com.asiainfo.hbase.fixmeta.ConfProperties;
+import com.hadoop.hbase.fixmeta.ConfProperties;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.hadoop.conf.Configuration;
