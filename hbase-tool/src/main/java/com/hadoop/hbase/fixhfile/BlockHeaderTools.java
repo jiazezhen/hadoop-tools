@@ -4,6 +4,8 @@ import org.apache.hadoop.fs.FSDataInputStream;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 public class BlockHeaderTools {
 
@@ -81,6 +83,20 @@ public class BlockHeaderTools {
         return result;
 
     }
+
+
+    public static void printBlockHeader(FSDataInputStream inputStream, long blockOffset, boolean hasCheckSum) throws IOException {
+        getBlockType(inputStream,blockOffset);
+        getOnDiskSizeWithoutHeader(inputStream,blockOffset);
+        getUncompressedSizeWithoutHeader(inputStream,blockOffset);
+        getPreBlockOffset(inputStream,blockOffset);
+        if(hasCheckSum){
+            getChecksumType(inputStream,blockOffset);
+            getBytesPerChecksum(inputStream,blockOffset);
+            getOnDiskDataSizeWithHeader(inputStream,blockOffset);
+        }
+    }
+
 
 
 
