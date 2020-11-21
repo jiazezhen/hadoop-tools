@@ -1,6 +1,7 @@
 package com.hadoop.hbase.fixhfile;
 
 
+import com.hadoop.hbase.config.ConfigHelper;
 import com.hadoop.hbase.fixmeta.ConfProperties;
 import org.apache.commons.cli.*;
 import org.apache.hadoop.conf.Configuration;
@@ -186,42 +187,9 @@ public class FixHFileTool {
     }
 
     private static void kerberosSwitch(CommandLine result) throws IOException, InterruptedException {
-        conf = HBaseConfiguration.create();
         ConfProperties.setPath(result.getOptionValue("c"));
-
-        conf.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");
-        conf.set("fs.defaultFS", ConfProperties.getConf().get("fs.defaultFS").toString());
-        conf.set("hbase.zookeeper.quorum", ConfProperties.getConf().get("hbase.zookeeper.quorum").toString());
-        conf.set("hbase.zookeeper.property.clientPort",
-                ConfProperties.getConf().get("hbase.zookeeper.property.clientPort").toString());
-        conf.set("zookeeper.znode.parent", ConfProperties.getConf().get("zookeeper.znode.parent").toString());
-
-
-        if (result.hasOption(KERBEROS_ENABLE)) {
-            System.out.println("kerberos is enabled");
-            System.setProperty("java.security.krb5.conf",
-                    ConfProperties.getConf().get("java.security.krb5.conf").toString());
-            conf.set("hadoop.security.authentication", "kerberos");
-            conf.set("hbase.security.authentication","kerberos");
-            conf.set("hbase.master.kerberos.principal",ConfProperties.getConf().getProperty("hbase.master.kerberos.principal"));
-            conf.set("hbase.regionserver.kerberos.principal",ConfProperties.getConf().getProperty("hbase.regionserver.kerberos.principal"));
-            UserGroupInformation.setConfiguration(conf);
-            UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(
-                    ConfProperties.getConf().get("krb.user.principle").toString(),
-                    ConfProperties.getConf().get("krb.user.keytab").toString());
-
-            fs = ugi.doAs(new PrivilegedExceptionAction<FileSystem>() {
-                @Override
-                public FileSystem run() throws IOException {
-                    return FileSystem.get(conf);
-                }
-            });
-        } else {
-            System.out.println("kerberos is disabled");
-            System.setProperty("HADOOP_USER_NAME", ConfProperties.getConf().getProperty("hadoop.user.name"));
-            fs = FileSystem.get(conf);
-        }
-
+        conf = ConfigHelper.getHadoopConf(result.hasOption(KERBEROS_ENABLE));
+        fs = ConfigHelper.getFileSystem(conf,result.hasOption(KERBEROS_ENABLE));
         Path corruptPath = new Path(result.getOptionValue(CORRUPTED_HFILE_PATH));
         Path fixedPath = new Path(result.getOptionValue(FIXED_HFILE_PATH));
         FixHFileTool fixHFileTool = new FixHFileTool();
