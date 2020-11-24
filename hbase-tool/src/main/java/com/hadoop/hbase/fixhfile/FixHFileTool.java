@@ -56,6 +56,7 @@ public class FixHFileTool {
     private static final String BLOCK_COUNT_P = "b";
     private static final String HEADER_SIZE_P = "d";
     private static final String MAX_DATA_SIZE_P = "d";
+    private static final String COMPRESSION_ALGORITHM_P = "a";
 
 
     /**
@@ -78,6 +79,8 @@ public class FixHFileTool {
      * we use snappy,so give the MAX_DATA_SIZE=32*1024
      */
     private static  int MAX_DATA_SIZE = 32768;
+
+    private static Compression.Algorithm COMPRESSION_ALGORITHM;
 
     private static FileSystem fs;
     private static Configuration conf;
@@ -143,7 +146,14 @@ public class FixHFileTool {
                 .argName("maxDataSize")
                 .desc("A hfile contains many data blocks,the default blockSize is 64k," +
                         "if we has compression the OnDiskSizeWithHeader will little than 64k," +
-                        "usually if use snappy,the size is little than 32k,so default is 32")
+                        "usually if use snappy,the size is little than 32k,so default is 32k")
+                .build());
+
+        options.addOption(Option.builder(COMPRESSION_ALGORITHM_P)
+                .longOpt("compressionAlgorithm")
+                .hasArg()
+                .argName("compressionAlgorithm")
+                .desc("Compression Algorithm \nsupport values:none,snappy,lzo,gz,lz4,bzip2,zstd \n defalut: none")
                 .build());
 
 
@@ -179,6 +189,32 @@ public class FixHFileTool {
             BLOCK_COUNT = Integer.parseInt(result.getOptionValue(BLOCK_COUNT_P,"200000"));
             MAX_DATA_SIZE = Integer.parseInt(result.getOptionValue(MAX_DATA_SIZE_P,"32768"));
 
+            String compressAlg = result.getOptionValue(COMPRESSION_ALGORITHM_P,"none");
+            switch (compressAlg){
+                case "snappy":
+                    COMPRESSION_ALGORITHM = Compression.Algorithm.SNAPPY;
+                    break;
+                case "lzo":
+                    COMPRESSION_ALGORITHM = Compression.Algorithm.LZO;
+                    break;
+                case "bzip2":
+                    COMPRESSION_ALGORITHM = Compression.Algorithm.BZIP2;
+                    break;
+                case "lz4":
+                    COMPRESSION_ALGORITHM = Compression.Algorithm.LZ4;
+                    break;
+                case "gz":
+                    COMPRESSION_ALGORITHM = Compression.Algorithm.GZ;
+                    break;
+                case "zstd":
+                    COMPRESSION_ALGORITHM = Compression.Algorithm.ZSTD;
+                    break;
+                default:
+                    COMPRESSION_ALGORITHM = Compression.Algorithm.NONE;
+
+            }
+
+
             kerberosSwitch(result);
 
         } else {
@@ -206,9 +242,9 @@ public class FixHFileTool {
      */
     public void kvReaderAndWriter (Path corruptHFile, Path fixedFile) throws IOException {
         long beginTime = System.currentTimeMillis();
-        System.out.println("*****************************start fix hfile:\t"+ corruptHFile.toString());
+        System.out.println("********************start fix hfile: "+ corruptHFile.toString()+"**************");
         reader = HFile.createReader(fs, corruptHFile, CacheConfig.DISABLED, true,fs.getConf());
-        HFileContext hfileContext = new HFileContextBuilder().withCompression(Compression.Algorithm.SNAPPY).build();
+        HFileContext hfileContext = new HFileContextBuilder().withCompression(COMPRESSION_ALGORITHM).build();
 
         HFile.Writer writer = HFile.getWriterFactory(conf,
                 new CacheConfig(conf)).withPath(fs, fixedFile).withFileContext(hfileContext).create();
@@ -264,7 +300,7 @@ public class FixHFileTool {
                 }while (blockBuffer.remaining()>0);
             }
             System.out.println("trailer.getLastDataBlockOffset()="+trailer.getLastDataBlockOffset());
-            System.out.println("*****************************finish fix hfile: "+ corruptHFile.toString()+"\t--->newFile="+fixedFile.toString());
+            System.out.println("***********************finish fix hfile: "+ corruptHFile.toString()+"\t--->newFile="+fixedFile.toString()+"***********");
             NumberFormat numberFormat = NumberFormat.getInstance();
             numberFormat.setMaximumFractionDigits(2);
             String lossRate = numberFormat.format(((float)trailer.getEntryCount()-(float)kvCount)/trailer.getEntryCount());
