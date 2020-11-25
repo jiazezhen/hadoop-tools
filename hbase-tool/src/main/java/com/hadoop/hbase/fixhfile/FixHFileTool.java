@@ -9,22 +9,17 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.*;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
-import org.apache.hadoop.hbase.client.RegionInfo;
-import org.apache.hadoop.hbase.io.FSDataInputStreamWrapper;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.*;
 import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.WritableUtils;
-import org.apache.hadoop.security.UserGroupInformation;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.security.PrivilegedExceptionAction;
 import java.text.NumberFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * @author jiazz
@@ -214,7 +209,6 @@ public class FixHFileTool {
 
             }
 
-
             kerberosSwitch(result);
 
         } else {
@@ -251,9 +245,10 @@ public class FixHFileTool {
         long fileSize = fs.getFileStatus(corruptHFile).getLen();
 
         try {
-            FSDataInputStreamWrapper fsdis  = new FSDataInputStreamWrapper(fs, corruptHFile);
-            FixedFileTrailer trailer =
-                    FixedFileTrailer.readFromStream(fsdis.getStream(false), fileSize);
+            // FSDataInputStreamWrapper fsdis  = new FSDataInputStreamWrapper(fs, corruptHFile);
+            // FixedFileTrailer trailer =
+            //         FixedFileTrailer.readFromStream(fsdis.getStream(false), fileSize);
+            FixedFileTrailer trailer = reader.getTrailer();
             long max = trailer.getLastDataBlockOffset();
             // long offset = trailer.getFirstDataBlockOffset();
             HFileBlock block;
@@ -310,6 +305,7 @@ public class FixHFileTool {
             System.out.println("totalUsedTime: "+(endTime-beginTime)/1000+"s");
         } finally {
             writer.close();
+            reader.close();
             fs.close();
         }
 
@@ -330,7 +326,7 @@ public class FixHFileTool {
         long fileSize = fs.getFileStatus(file).getLen();
         System.out.println("fileSize="+fileSize);
         int count = 0;
-        int offset = 0;
+        long offset = 0;
         long blockOffset = -1;
         byte[] oneByte = new byte[1];
         // fsDataInputStream.seek(26684325);
