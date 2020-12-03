@@ -278,7 +278,7 @@ public class FixHFileTool {
                 blockCount++;
                 blockBuffer =block.getBufferWithoutHeader();
                 updateCurrBlockRef(block);
-                System.out.println("<<<<<<<<<<<<<<<<<<<<writing block ... ... ... ... ...\n"+block);
+                // System.out.println("<<<<<<<<<<<<<<<<<<<<writing block ... ... ... ... ...\n"+block);
                 // read kv
                 do{
                     readKeyValueLen();
@@ -288,14 +288,14 @@ public class FixHFileTool {
                     }
                     // System.out.println(block);
                     Cell cell = getCell();
-                    System.out.println("write cell:\t" + cell);
+                    // System.out.println("write cell:\t" + cell);
                     writer.append(cell);
                     kvCount++;
                     blockBuffer.skip(getCurCellSerializedSize());
                 }while (blockBuffer.remaining()>0);
             }
-            System.out.println("trailer.getLastDataBlockOffset()="+trailer.getLastDataBlockOffset());
-            System.out.println("***********************finish fix hfile: "+ corruptHFile.toString()+"\t--->newFile="+fixedFile.toString()+"***********");
+            // System.out.println("trailer.getLastDataBlockOffset()="+trailer.getLastDataBlockOffset());
+            System.out.println("***********************finish fix hfile: "+ corruptHFile.toString()+"***********");
             NumberFormat numberFormat = NumberFormat.getInstance();
             numberFormat.setMaximumFractionDigits(2);
             String lossRate = numberFormat.format(((float)trailer.getEntryCount()-(float)kvCount)/trailer.getEntryCount());
@@ -324,7 +324,7 @@ public class FixHFileTool {
         System.out.println("-------------start compute hFile block's offset and dataSize -----------------");
         FSDataInputStream fsDataInputStream = fs.open(file);
         long fileSize = fs.getFileStatus(file).getLen();
-        System.out.println("fileSize="+fileSize);
+        // System.out.println("fileSize="+fileSize);
         int count = 0;
         long offset = 0;
         long blockOffset = -1;
@@ -355,7 +355,7 @@ public class FixHFileTool {
                     blockOffset = 0;
                     blockOffsets[count] = 0;
                 }
-                System.out.println("found the " + count + "th block,\toffset="+blockOffset);
+                // System.out.println("found the " + count + "th block,\toffset="+blockOffset);
                 count++;
             }
         }
