@@ -177,7 +177,7 @@ public class HFileBlock implements Cacheable {
    * So, we have this ByteBuff type. Unfortunately, it is spread all about HFileBlock. Would be
    * good if could be confined to cache-use only but hard-to-do.
    */
-  private ByteBuff buf;
+  public ByteBuff buf;
 
   /** Meta data that holds meta information on the hfileblock.
    */
@@ -234,7 +234,7 @@ public class HFileBlock implements Cacheable {
   /**
    * Each checksum value is an integer that can be stored in 4 bytes.
    */
-  static final int CHECKSUM_SIZE = Bytes.SIZEOF_INT;
+  public static final int CHECKSUM_SIZE = Bytes.SIZEOF_INT;
 
   static final byte[] DUMMY_HEADER_NO_CHECKSUM =
           new byte[HConstants.HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM];
@@ -362,8 +362,8 @@ public class HFileBlock implements Cacheable {
    * to that point.
    * @param buf Has header, content, and trailing checksums if present.
    */
-  HFileBlock(ByteBuff buf, boolean usesHBaseChecksum, MemoryType memType, final long offset,
-             final int nextBlockOnDiskSize, HFileContext fileContext) throws IOException {
+  public HFileBlock(ByteBuff buf, boolean usesHBaseChecksum, MemoryType memType, final long offset,
+                    final int nextBlockOnDiskSize, HFileContext fileContext) throws IOException {
     buf.rewind();
     final BlockType blockType = BlockType.read(buf);
     final int onDiskSizeWithoutHeader = buf.getInt(Header.ON_DISK_SIZE_WITHOUT_HEADER_INDEX);
@@ -659,7 +659,7 @@ public class HFileBlock implements Cacheable {
    * from the existing buffer. Does not change header fields.
    * Reserve room to keep checksum bytes too.
    */
-  private void allocateBuffer() {
+  public void allocateBuffer() {
     int cksumBytes = totalChecksumBytes();
     int headerSize = headerSize();
     int capacityNeeded = headerSize + uncompressedSizeWithoutHeader + cksumBytes;
@@ -2014,7 +2014,7 @@ public class HFileBlock implements Cacheable {
    * Calculate the number of bytes required to store all the checksums
    * for this block. Each checksum value is a 4 byte integer.
    */
-  int totalChecksumBytes() {
+  public int totalChecksumBytes() {
     // If the hfile block has minorVersion 0, then there are no checksum
     // data to validate. Similarly, a zero value in this.bytesPerChecksum
     // indicates that cached blocks do not have checksum data because

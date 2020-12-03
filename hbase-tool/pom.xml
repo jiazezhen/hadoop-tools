@@ -235,6 +235,23 @@
                             </archive>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>FixHFileFinalTool</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <finalName>FixHFileFinalTool-${project.version}</finalName>
+                            <archive>
+                                <manifest>
+                                    <mainClass>com.hadoop.hbase.fixhfile.FixHFileFinalTool</mainClass>
+                                    <addClasspath>true</addClasspath>
+                                    <classpathPrefix>./lib</classpathPrefix>
+                                </manifest>
+                            </archive>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
         </plugins>
