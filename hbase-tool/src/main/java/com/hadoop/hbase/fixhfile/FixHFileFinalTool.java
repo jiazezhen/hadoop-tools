@@ -40,7 +40,6 @@ public class FixHFileFinalTool {
     private static final String HEADER_SIZE_P = "i";
     private static final String MAX_DATA_SIZE_P = "d";
     private static final String COMPRESSION_ALGORITHM_P = "a";
-    private static final String DISCARD_LAST_BLOCK_P = "l";
 
     /**
      * A hfile contains many data blocks,the default blockSize is 64k,
@@ -53,7 +52,6 @@ public class FixHFileFinalTool {
     /** If has checksum 33 else 24 **/
     private static int HEADER_SIZE = 33;
     private static int BLOCK_COUNT = 200000;
-    private static boolean DISCARD_LAST_BLOCK = false;
 
     private static Compression.Algorithm COMPRESSION_ALGORITHM = Compression.Algorithm.SNAPPY;
 
@@ -162,11 +160,6 @@ public class FixHFileFinalTool {
                 .desc("If the cluster has Kerberos enabled,default is disable")
                 .build());
 
-        options.addOption(Option.builder(DISCARD_LAST_BLOCK_P)
-                .longOpt("discardLastBlock")
-                .desc("found if the trailer was damaged, the last block always cannot be decompressed\n default: false")
-                .build());
-
 
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
@@ -194,9 +187,6 @@ public class FixHFileFinalTool {
             BLOCK_COUNT = Integer.parseInt(result.getOptionValue(BLOCK_COUNT_P,"200000"));
             MAX_DATA_SIZE = Integer.parseInt(result.getOptionValue(MAX_DATA_SIZE_P,"32768"));
             initCompressionAlgorithm(result.getOptionValue(COMPRESSION_ALGORITHM_P,"none"));
-            if(result.hasOption(DISCARD_LAST_BLOCK_P)){
-                DISCARD_LAST_BLOCK=true;
-            }
 
             kerberosSwitch(result);
 
@@ -265,11 +255,6 @@ public class FixHFileFinalTool {
         try {
             int index = 0;
             while (blockDataSizes[index] !=-1) {
-                /**found if the trailer is damaged, the last block always cannot be decompressed**/
-                if(DISCARD_LAST_BLOCK && blockDataSizes[index+1] == -1){
-                    index++;
-                    continue;
-                }
                 long offset = blockOffsets[index];
                 int onDiskSizeWithHeader = blockDataSizes[index];
                 int onDiskSizeWithoutHeader = onDiskSizeWithHeader - HEADER_SIZE;
@@ -311,6 +296,9 @@ public class FixHFileFinalTool {
                         inputStreamOfUncompress.reset();
                         allocateBuffer(blk,uncompressedSize);
                         IOUtils.readFully(inputStreamOfUncompress, blk.getBufferWithoutHeader().array(), blk.getBufferWithoutHeader().arrayOffset(), uncompressedSize);
+                    }catch (Error error){
+                        logger.debug(error);
+                        continue;
                     } finally {
                         inputStreamOfUncompress.close();
                         blockDecompressorStream.close();
@@ -326,10 +314,15 @@ public class FixHFileFinalTool {
 
                 logger.debug("............writing block............\n"+blk);
                 do{
-                    readKeyValueLen();
-                    Cell cell = getCell();
-                    writer.append(cell);
-                    blockBuffer.skip(getCurCellSerializedSize());
+                    try {
+                        readKeyValueLen();
+                        Cell cell = getCell();
+                        writer.append(cell);
+                        blockBuffer.skip(getCurCellSerializedSize());
+                    } catch (Exception e) {
+                        logger.debug(e);
+                        break;
+                    }
                 }while (blockBuffer.remaining()>0);
             }
             logger.info("***********************finish fix hfile: "+ corruptHFile.toString()+"\t--->newFile="+fixedFile.toString()+"***********");
