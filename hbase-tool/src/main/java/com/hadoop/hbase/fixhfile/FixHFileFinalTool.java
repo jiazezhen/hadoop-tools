@@ -234,22 +234,22 @@ public class FixHFileFinalTool {
     public void ioReaderAndWriter(Path corruptHFile, Path fixedFile) throws IOException {
         long beginTime = System.currentTimeMillis();
         logger.info("********************start fix hfile: "+ corruptHFile.toString()+"**************");
-        HFileContext hfileContext = new HFileContextBuilder().withCompression(COMPRESSION_ALGORITHM).build();
-        HFile.Writer writer = HFile.getWriterFactory(conf,
-                new CacheConfig(conf)).withPath(fs, fixedFile).withFileContext(hfileContext).create();
-        FSDataInputStream inputStream = fs.open(corruptHFile);
-        filePath = corruptHFile;
-
         logger.info("fileSize="+fs.getFileStatus(corruptHFile).getLen());
         logger.info("**********getAllBlockOffsetAndDataSize**********");
         int[] blockDataSizes = new int[BLOCK_COUNT];
         long[] blockOffsets = new long[BLOCK_COUNT];
         getAllBlockOffsetAndDataSize(corruptHFile,blockOffsets,blockDataSizes);
-        // blockOffsets[0] = 2073032;
-        // blockDataSizes[0] = 20822;
-        // blockOffsets[1] = 2093854;
-        // blockDataSizes[1] = 20881;
-
+        if(blockDataSizes[0] == 0 && blockOffsets[0] == 0){
+            logger.info("**********This hFile is too small, no available block found, stop fix !!!**********");
+            logger.info("***********************finish fix hfile: "+ corruptHFile.toString()+"***********************");
+            fs.close();
+            return;
+        }
+        HFileContext hfileContext = new HFileContextBuilder().withCompression(COMPRESSION_ALGORITHM).build();
+        HFile.Writer writer = HFile.getWriterFactory(conf,
+                new CacheConfig(conf)).withPath(fs, fixedFile).withFileContext(hfileContext).create();
+        FSDataInputStream inputStream = fs.open(corruptHFile);
+        filePath = corruptHFile;
 
         logger.info("**********readBlock,decompressBlock and writeBlock**********");
         try {
@@ -394,10 +394,12 @@ public class FixHFileFinalTool {
                 count++;
             }
         }
-        int lastDataSize = BlockHeaderTools.getOnDiskSizeWithoutHeader(fsDataInputStream, blockOffset)+ HEADER_SIZE;
-        blockDataSizes[count-1] = lastDataSize;
-        blockDataSizes[count] = -1;
-        logger.debug("found the " + (count-1) + "th block,\toffset="+blockOffsets[count-1]+"\tdataSize="+blockDataSizes[count-1]);
+        if(count>0){
+            int lastDataSize = BlockHeaderTools.getOnDiskSizeWithoutHeader(fsDataInputStream, blockOffset)+ HEADER_SIZE;
+            blockDataSizes[count-1] = lastDataSize;
+            blockDataSizes[count] = -1;
+            logger.debug("found the " + (count-1) + "th block,\toffset="+blockOffsets[count-1]+"\tdataSize="+blockDataSizes[count-1]);
+        }
         fsDataInputStream.close();
         logger.info("-------------finish compute hFile block's offset and dataSize -----------------");
     }
