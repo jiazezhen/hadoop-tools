@@ -32,7 +32,7 @@ public class ConfigHelper {
                 String k = stringBuilder.toString();
                 conf.set(k,ConfProperties.getConf().get(k).toString());
             }
-            conf.set("dfs.client.failover.proxy.provider.mycluster",ConfProperties.getConf().get("dfs.client.failover.proxy.provider.mycluster").toString());
+            conf.set("dfs.client.failover.proxy.provider."+nameServices,ConfProperties.getConf().get("dfs.client.failover.proxy.provider."+nameServices).toString());
         }
         conf.set("hbase.zookeeper.quorum", ConfProperties.getConf().get("hbase.zookeeper.quorum").toString());
         conf.set("hbase.zookeeper.property.clientPort",
